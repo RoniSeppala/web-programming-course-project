@@ -32,7 +32,6 @@ window.onload = function() {
 }
 
 class PlayGame extends Phaser.Scene {
-    
     constructor() {
         super()
     }
@@ -50,6 +49,7 @@ class PlayGame extends Phaser.Scene {
         this.character = this.physics.add.sprite(200,200,"characterIdle",0);
         this.character.body.gravity.y = gameOptions.characterGravity;
         this.physics.add.collider(this.character, this.groundGroup);
+        this.character.jumpcount = 1;
 
         this.cursors = this.input.keyboard.createCursorKeys()
         
@@ -69,6 +69,24 @@ class PlayGame extends Phaser.Scene {
             //this.character.anims.play("turn", true)
         }
 
+        if(this.cursors.up.isDown && this.character.body.touching.down && this.character.jumpcount == 1) { //normal jump
+            this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
+            this.character.jumpcount = 0
+        }
+
+        if(this.cursors.up.isDown && this.character.jumpcount == 0) { //jump in air
+            this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
+            this.character.jumpcount = -1
+        }
+
+        if(this.character.body.touching.down) {
+            this.character.jumpcount = 1
+        }
+
+
+        //console.log(this.character.jumpcount)
+
+
     }
 
 
@@ -82,9 +100,12 @@ class PlayGame extends Phaser.Scene {
             allowGravity: false
         })
 
-        this.groundGroup.create(32,64,"sideBlock").setOrigin(0,0)
         for (let index = 0; index < gameOptions.windowWidth/gameOptions.widthOfTile; index++) {
             this.groundGroup.create((index*gameOptions.widthOfTile),(gameOptions.windowHeight-gameOptions.widthOfTile),("innerBlock")).setOrigin(0,0);
+            
+        }
+        for (let index = 0; index < gameOptions.windowWidth/gameOptions.widthOfTile; index++) {
+            this.groundGroup.create((index*gameOptions.widthOfTile),(gameOptions.windowHeight-gameOptions.widthOfTile),("sideBlock")).setOrigin(0,0);
             
         }
 
