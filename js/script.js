@@ -5,7 +5,9 @@ const gameOptions = {
     windowHeight: 448,
     widthOfTile: 32,
     characterGravity: 300,
-    characterSpeed: 250
+    characterSpeed: 250,
+    doubleJumpFrames: 200,
+    jetPackLiftGravity: 200
 }
 
 window.onload = function() {
@@ -32,6 +34,7 @@ window.onload = function() {
 }
 
 class PlayGame extends Phaser.Scene {
+
     constructor() {
         super()
     }
@@ -50,7 +53,10 @@ class PlayGame extends Phaser.Scene {
         this.character.body.gravity.y = gameOptions.characterGravity;
         this.physics.add.collider(this.character, this.groundGroup);
         this.character.jumpcount = 1;
-
+        this.character.hasReleasedJumpFor = 0;
+        this.character.hasHeldJumpFor = 0;
+        this.character.hasTouchedGroundFor = 0;
+        this.character.doubleJumpTimer = 0;
         this.cursors = this.input.keyboard.createCursorKeys()
         
     }
@@ -69,23 +75,42 @@ class PlayGame extends Phaser.Scene {
             //this.character.anims.play("turn", true)
         }
 
-        if(this.cursors.up.isDown && this.character.body.touching.down && this.character.jumpcount == 1) { //normal jump
+        if(this.character.hasHeldJumpFor > 1 && this.character.hasTouchedGroundFor > 4 && this.character.jumpcount == 1) { //normal jump
             this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
-            this.character.jumpcount = 0
-        }
-
-        if(this.cursors.up.isDown && this.character.jumpcount == 0) { //jump in air
-            this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
-            this.character.jumpcount = -1
-        }
-
-        if(this.character.body.touching.down) {
+            this.character.jumpcount = 0;
+            this.character.hasTouchedGroundFor = 0;
+        }else if(this.cursors.up.isDown && this.character.jumpcount == 0 && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
+            //this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
+            this.character.jumpcount = this.character.jumpcount - 1
+        }else if (this.character.jumpcount == -1 && this.character.doubleJumpTimer < gameOptions.doubleJumpFrames && this.character.hasHeldJumpFor > 3){ //use jetpack
+            this.character.body.velocity.y = -(gameOptions.jetPackLiftGravity)*((gameOptions.doubleJumpFrames-this.character.doubleJumpTimer)/gameOptions.doubleJumpFrames)//caluclation so jetpack power gradually goes down
+        }else if(this.character.hasTouchedGroundFor > 4) {
             this.character.jumpcount = 1
+            this.character.doubleJumpTimer = 0
         }
 
+        if (this.cursors.up.isDown){//tracker for how long has up been held
+            this.character.hasReleasedJumpFor = 0;
+        } else {
+            this.character.hasReleasedJumpFor = this.character.hasReleasedJumpFor + 1;
+        }
 
-        //console.log(this.character.jumpcount)
+        if (!this.cursors.up.isDown){//tracker for how long has up been released
+            this.character.hasHeldJumpFor = 0;
+        } else {
+            this.character.hasHeldJumpFor = this.character.hasHeldJumpFor + 1;
+        }
 
+        if (!this.character.body.touching.down){//tracker for how long has character touched ground
+            this.character.hasTouchedGroundFor = 0;
+        } else {
+            this.character.hasTouchedGroundFor = this.character.hasTouchedGroundFor + 1;
+        }
+
+        if (this.character.jumpcount == -1){ //tracker for jetpack frames
+            this.character.doubleJumpTimer++
+        }
+        
 
     }
 
