@@ -28,7 +28,8 @@ window.onload = function() {
             arcade: {
                 gravity: {
                     y: 0
-                }
+                },
+                debug: true
             }
         },
         scene: PlayGame
@@ -53,11 +54,13 @@ class PlayGame extends Phaser.Scene {
         this.load.spritesheet("characterJump","assets/character/Attack4.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("bullet","assets/character/Bullet.png",{frameWidth: 12, frameHeight: 6, startFrame: 1, endFrame: 1})
         this.load.image("reticle","assets/reticle.png")
+        this.load.spritesheet("card","assets/animatedObjects/Card.png",{frameWidth: 24, frameHeight: 24})
+        this.load.spritesheet("money","assets/animatedObjects/Money.png",{frameWidth: 24, frameHeight: 24})
+        this.load.spritesheet("enemyDestroyer","assets/enemies/Destroyer/Idle.png",{frameWidth:128, frameHeight:128})
 
     }
 
     create () {
-        
         this.loadLevel2()
 
         this.character.body.gravity.y = gameOptions.characterGravity;
@@ -77,7 +80,17 @@ class PlayGame extends Phaser.Scene {
         this.bulletGroup = new BulletGroup(this);
         this.physics.add.overlap(this.bulletGroup,this.groundGroup,this.bulletToucGround,null,this)
 
-        
+        this.moneyGroup = this.physics.add.group({})
+        this.money = 0
+        this.physics.add.overlap(this.character,this.moneyGroup, this.collectMoney , null , this)
+
+        this.cardGroup = this.physics.add.group({})
+        this.hasCard = false
+        this.physics.add.overlap(this.character, this.cardGroup, this.collectCard , null, this)
+
+        this.enemyDestroyerGroup = new EnemyDestroyerGroup(this)
+
+
 
 
 
@@ -115,16 +128,37 @@ class PlayGame extends Phaser.Scene {
             frameRate: 1,
             repeat: 1
         })
+
+        this.anims.create({
+            key:"cardAnimated",
+            frames: this.anims.generateFrameNumbers("card", {start:0, end: 7}),
+            frameRate: 8,
+            repeat: -1
+        })
+
+        this.anims.create({
+            key:"moneyAnimated",
+            frames: this.anims.generateFrameNumbers("money", {start:0, end: 5}),
+            frameRate: 6,
+            repeat: -1
+        })
+
         
+        //this.cardGroup.create(400,400).anims.play("cardAnimated",true) //test if card works
+        //this.moneyGroup.create(400,400).anims.play("moneyAnimated",true) //test if money works
+
+        this.loadHud()
     }
 
-    update () {    
+    update () {
         if(this.cursors.left.isDown) {
             this.character.setFlipX(true)
+            this.character.isFacingLeft = true;
             this.character.body.velocity.x = -gameOptions.characterSpeed
         }
         else if(this.cursors.right.isDown) {
             this.character.setFlipX(false)
+            this.character.isFacingLeft = false;
             this.character.body.velocity.x = gameOptions.characterSpeed
         }
         else {
@@ -278,10 +312,12 @@ class PlayGame extends Phaser.Scene {
 
         
         this.character = this.physics.add.sprite(characterSpawn[0]*gameOptions.widthOfTile+(72/2),characterSpawn[1]*gameOptions.widthOfTile-(72/2),"characterIdle",0);
+        this.character.isFacingLeft = false;
 
     }
 
     levelEssentialLoad(){
+        this.hasCard = false
         this.background = this.add.image(0,0,"bg").setOrigin(0,0);
         this.background.displayWidth = gameOptions.windowWidth;
         this.background.displayHeight = gameOptions.windowHeight;
@@ -312,6 +348,22 @@ class PlayGame extends Phaser.Scene {
         }
     }
 
+    loadHud(){
+        this.hudElementCard = this.physics.add.sprite(0,0,"card",0).setOrigin(0,0)
+        this.hudElementMoney = this.physics.add.sprite(0,18,"money",0).setOrigin(0,0)
+        
+        this.hudElementCard.anims.play("cardAnimated",true)
+        this.hudElementMoney.anims.play("moneyAnimated",true)
+
+        this.cardText = this.add.text(24,4,"Not Aquired", {fontSize: "16px", fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' })
+        this.moneyText = this.add.text(24,24,"0", {fontSize: "16px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' })
+
+        if (this.hasCard) {
+            this.cardText.setText("Card Aquired")
+        } 
+
+    }
+
     addEvents(){
         this.input.on("pointermove", (pointer) => {
             this.reticle.x = pointer.x;
@@ -324,18 +376,39 @@ class PlayGame extends Phaser.Scene {
     }
 
     shootBullet(){
-        this.bulletGroup.fireBullet(this.character.x, this.character.y,this.reticle.x, this.reticle.y)
+        this.bulletGroup.fireBullet(this.character.x, this.character.y,this.reticle.x, this.reticle.y, this.character.isFacingLeft)
     }
 
     bulletToucGround(bullet){
-        bullet.setActive(false)
-        bullet.setVisible(false)
-        bullet.setVelocityY(0)
-        bullet.setVelocityX(0)
-        bullet.setGravity(0,0)
-        bullet.body.reset(-50,-50)
+        bullet.setActive(false);
+        bullet.setVisible(false);
     }
 
+    collectMoney(character, start){ //for score
+        start.disableBody(true,true)
+        this.money += 500
+        this.moneyText.setText(this.money)
+
+    }
+
+    collectCard(character, start){ //for opening doors
+        start.disableBody(true,true)
+        this.hasCard = true
+        this.cardText.setText("Card Aquired")
+    }
+
+}
+
+class EnemyDestroyerGroup extends Phaser.Physics.Arcade.Group{
+    constructor(scene) {
+		super(scene.physics.world, scene);
+    }
+}
+
+class EnemyDestroyer extends Phaser.Physics.Arcade.Sprite{
+    constructor(scene, x, y) {
+		super(scene, x, y, "enemyDestroyer");
+	}
 }
 
 class BulletGroup extends Phaser.Physics.Arcade.Group
@@ -352,10 +425,10 @@ class BulletGroup extends Phaser.Physics.Arcade.Group
 		})
 	}
 
-    fireBullet(xStart,yStart,xEnd,yEnd){
+    fireBullet(xStart,yStart,xEnd,yEnd,characterIsFacingLeft){
         const bullet = this.getFirstDead(false);
         if (bullet){
-            bullet.fire(xStart,yStart,xEnd,yEnd)
+            bullet.fire(xStart,yStart,xEnd,yEnd,characterIsFacingLeft)
         }
     }
  
@@ -376,7 +449,7 @@ class Bullet extends Phaser.Physics.Arcade.Sprite {
 		super(scene, x, y, "bullet");
 	}
 
-    fire (xStart,yStart,xEnd,yEnd){
+    fire (xStart,yStart,xEnd,yEnd,characterIsFacingLeft){
         this.body.reset(xStart,yStart-10);
         let xDirection = (xEnd-xStart)
         let yDirection = (yEnd-yStart)
@@ -387,9 +460,37 @@ class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.setActive(true);
         this.setVisible(true);
 
-        this.setVelocityY(finalY*gameOptions.bulletSpeed);
-        this.setVelocityX(finalX*gameOptions.bulletSpeed)
+        /*this.setVelocityY(finalY*gameOptions.bulletSpeed);
+        this.setVelocityX(finalX*gameOptions.bulletSpeed)*/
+
         this.setGravity(0,gameOptions.bulletDrop)
+
+        if (characterIsFacingLeft){
+            if (finalX < 0){
+                this.setVelocityY(finalY*gameOptions.bulletSpeed);
+                this.setVelocityX(finalX*gameOptions.bulletSpeed)
+            } else {
+                if (finalY > 0){
+                    this.setVelocityY(gameOptions.bulletSpeed)
+                } else {
+                    this.setVelocityY(-gameOptions.bulletSpeed)
+                }
+
+            }
+
+        } else {
+            if (finalX > 0){
+                this.setVelocityY(finalY*gameOptions.bulletSpeed);
+                this.setVelocityX(finalX*gameOptions.bulletSpeed)
+            } else {
+                if (finalY > 0){
+                    this.setVelocityY(gameOptions.bulletSpeed)
+                } else {
+                    this.setVelocityY(-gameOptions.bulletSpeed)
+                }
+
+            }
+        }
     }
 
 
