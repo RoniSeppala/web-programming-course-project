@@ -1,4 +1,5 @@
-let game
+let game;
+let bullets;
 
 const gameOptions = {
     windowWidth: 800,
@@ -6,8 +7,10 @@ const gameOptions = {
     widthOfTile: 32,
     characterGravity: 400,
     characterSpeed: 250,
-    doubleJumpFrames: 200,
-    jetPackLiftGravity: 200
+    doubleJumpFrames: 300,
+    jetPackLiftGravity: 200,
+    bulletSpeed: 1000,
+    bulletDrop: 100
 }
 
 window.onload = function() {
@@ -48,6 +51,8 @@ class PlayGame extends Phaser.Scene {
         this.load.spritesheet("characterIdle", "assets/character/Idle.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterWalk","assets/character/Walk.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterJump","assets/character/Attack4.png",{frameWidth: 72, frameHeight: 72})
+        this.load.spritesheet("bullet","assets/character/Bullet.png",{frameWidth: 12, frameHeight: 6, startFrame: 1, endFrame: 1})
+        this.load.image("reticle","assets/reticle.png")
 
     }
 
@@ -65,6 +70,16 @@ class PlayGame extends Phaser.Scene {
         this.character.jumpAnimationCounter = 0;
         this.character.jumpAnimationTimeCounter = 0;
         this.cursors = this.input.keyboard.createCursorKeys()
+
+        this.reticle = this.add.image(-gameOptions.windowWidth/2,-gameOptions.windowHeight/2,"reticle")
+        this.addEvents();
+
+        this.bulletGroup = new BulletGroup(this);
+        this.physics.add.overlap(this.bulletGroup,this.groundGroup,this.bulletToucGround,null,this)
+
+        
+
+
 
         this.anims.create({
             key: "walk",
@@ -183,8 +198,6 @@ class PlayGame extends Phaser.Scene {
             this.character.jumpAnimationTimeCounter = 0
         }
 
-
-
     }
 
 
@@ -193,7 +206,6 @@ class PlayGame extends Phaser.Scene {
         let characterSpawnBlock = [0,13]
         this.levelEssentialLoad()
         this.initializeLevelToEmpty(level1PhysicsObjects)
-        console.log(level1PhysicsObjects)
         for (let index = 0; index < 25; index++) {
             level1PhysicsObjects[13][index] = ["sideBlock",0]
             
@@ -235,7 +247,6 @@ class PlayGame extends Phaser.Scene {
         let characterSpawnBlock = [0,13]
         this.levelEssentialLoad()
         this.initializeLevelToEmpty(level1PhysicsObjects)
-        console.log(level1PhysicsObjects)
         for (let index = 0; index < 25; index++) {
             level1PhysicsObjects[13][index] = ["sideBlock",0]
             
@@ -257,7 +268,6 @@ class PlayGame extends Phaser.Scene {
                 const innerElement = element[indexY];
 
                 if (innerElement[0] != ""){
-                    console.log(innerElement[1])
                     this.groundGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2),innerElement[0]).angle = innerElement[1]
                 }
                 
@@ -301,5 +311,86 @@ class PlayGame extends Phaser.Scene {
             indexZ++
         }
     }
+
+    addEvents(){
+        this.input.on("pointermove", (pointer) => {
+            this.reticle.x = pointer.x;
+            this.reticle.y = pointer.y;
+        })
+
+        this.input.on("pointerdown", pointer => {
+            this.shootBullet()
+        })
+    }
+
+    shootBullet(){
+        this.bulletGroup.fireBullet(this.character.x, this.character.y,this.reticle.x, this.reticle.y)
+    }
+
+    bulletToucGround(bullet){
+        bullet.setActive(false)
+        bullet.setVisible(false)
+        bullet.setVelocityY(0)
+        bullet.setVelocityX(0)
+        bullet.setGravity(0,0)
+        bullet.body.reset(-50,-50)
+    }
+
 }
 
+class BulletGroup extends Phaser.Physics.Arcade.Group
+{
+	constructor(scene) {
+		super(scene.physics.world, scene);
+		// Initialize the group
+		this.createMultiple({
+			classType: Bullet, 
+			frameQuantity: 40,
+			active: false,
+			visible: false,
+			key: 'bullet'
+		})
+	}
+
+    fireBullet(xStart,yStart,xEnd,yEnd){
+        const bullet = this.getFirstDead(false);
+        if (bullet){
+            bullet.fire(xStart,yStart,xEnd,yEnd)
+        }
+    }
+ 
+}
+ 
+class Bullet extends Phaser.Physics.Arcade.Sprite {
+    p
+    reUpdate(time, delta) {
+		super.preUpdate(time, delta);
+ 
+		if (this.y <= 0 || this.y > gameOptions.windowHeight || x < 0 || x > gameOptions.windowWidth) {
+			this.setActive(false);
+			this.setVisible(false);
+		}
+	}
+
+	constructor(scene, x, y) {
+		super(scene, x, y, "bullet");
+	}
+
+    fire (xStart,yStart,xEnd,yEnd){
+        this.body.reset(xStart,yStart-10);
+        let xDirection = (xEnd-xStart)
+        let yDirection = (yEnd-yStart)
+        let vectorLength = Math.sqrt(xDirection**2+yDirection**2)
+        let finalX = xDirection/vectorLength
+        let finalY = yDirection/vectorLength
+
+        this.setActive(true);
+        this.setVisible(true);
+
+        this.setVelocityY(finalY*gameOptions.bulletSpeed);
+        this.setVelocityX(finalX*gameOptions.bulletSpeed)
+        this.setGravity(0,gameOptions.bulletDrop)
+    }
+
+
+}
