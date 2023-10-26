@@ -4,7 +4,7 @@ const gameOptions = {
     windowWidth: 800,
     windowHeight: 448,
     widthOfTile: 32,
-    characterGravity: 300,
+    characterGravity: 400,
     characterSpeed: 250,
     doubleJumpFrames: 200,
     jetPackLiftGravity: 200
@@ -43,6 +43,8 @@ class PlayGame extends Phaser.Scene {
         this.load.image("bg","assets/stageObjects/Background/Background.png")
         this.load.image("sideBlock","assets/stageObjects/Tiles/IndustrialTile_05.png")
         this.load.image("innerBlock", "assets/stageObjects/Tiles/IndustrialTile_21.png")
+        this.load.image("innerCornerSide", "assets/stageObjects/Tiles/IndustrialTile_17.png")
+        this.load.image("outerCornerSide", "assets/stageObjects/Tiles/IndustrialTile_04.png")
         this.load.spritesheet("characterIdle", "assets/character/Idle.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterWalk","assets/character/Walk.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterJump","assets/character/Attack4.png",{frameWidth: 72, frameHeight: 72})
@@ -50,9 +52,9 @@ class PlayGame extends Phaser.Scene {
     }
 
     create () {
-        this.loadLevel1()
+        
+        this.loadLevel2()
 
-        this.character = this.physics.add.sprite(200,200,"characterIdle",0);
         this.character.body.gravity.y = gameOptions.characterGravity;
         this.physics.add.collider(this.character, this.groundGroup);
         this.character.jumpcount = 1;
@@ -186,7 +188,90 @@ class PlayGame extends Phaser.Scene {
     }
 
 
-    loadLevel1() {
+    loadLevel1() {//level width 25 blocks, level height 14 blocks
+        let level1PhysicsObjects = [] //should be three dimensional matrix as follows: [z(height)][y(width)][0,1], where 0 is the name of the block in string form and 1 is the roation of the block in int form
+        let characterSpawnBlock = [0,13]
+        this.levelEssentialLoad()
+        this.initializeLevelToEmpty(level1PhysicsObjects)
+        console.log(level1PhysicsObjects)
+        for (let index = 0; index < 25; index++) {
+            level1PhysicsObjects[13][index] = ["sideBlock",0]
+            
+        }
+
+        level1PhysicsObjects[13][5] = ["innerCornerSide",0]
+        level1PhysicsObjects[13][6] = ["innerCornerSide",90]
+        level1PhysicsObjects[12][5] = ["sideBlock",-90]
+        level1PhysicsObjects[12][6] = ["sideBlock",90]
+        level1PhysicsObjects[11][5] = ["outerCornerSide",0]
+        level1PhysicsObjects[11][6] = ["outerCornerSide",90]
+
+        level1PhysicsObjects[13][15] = ["innerCornerSide",0]
+        level1PhysicsObjects[13][17] = ["innerCornerSide",90]
+        for (let index = 0; index < 3; index++) {
+            level1PhysicsObjects[12-index][15] = ["sideBlock",-90]
+            
+        }
+        for (let index = 0; index < 3; index++) {
+            level1PhysicsObjects[12-index][17] = ["sideBlock",90]
+            
+        }
+        level1PhysicsObjects[12][6] = ["sideBlock",90]
+        level1PhysicsObjects[9][15] = ["outerCornerSide",0]
+        level1PhysicsObjects[9][16] = ["sideBlock",0]
+        level1PhysicsObjects[9][17] = ["outerCornerSide",90]
+        for (let index = 0; index < 4; index++) {
+            level1PhysicsObjects[13-index][16] = ["innerBlock",0]
+            
+        }
+
+
+        this.loadLevel(level1PhysicsObjects,characterSpawnBlock)
+
+    }
+
+    loadLevel2() {//level width 25 blocks, level height 14 blocks
+        let level1PhysicsObjects = [] //should be three dimensional matrix as follows: [z(height)][y(width)][0,1], where 0 is the name of the block in string form and 1 is the roation of the block in int form
+        let characterSpawnBlock = [0,13]
+        this.levelEssentialLoad()
+        this.initializeLevelToEmpty(level1PhysicsObjects)
+        console.log(level1PhysicsObjects)
+        for (let index = 0; index < 25; index++) {
+            level1PhysicsObjects[13][index] = ["sideBlock",0]
+            
+        }
+
+        
+
+
+        this.loadLevel(level1PhysicsObjects,characterSpawnBlock)
+
+    }
+    
+    loadLevel(levelPhysicsData,characterSpawn){
+        
+        for (let indexZ = 0; indexZ < levelPhysicsData.length; indexZ++) {
+            const element = levelPhysicsData[indexZ];
+
+            for (let indexY = 0; indexY < element.length; indexY++) {
+                const innerElement = element[indexY];
+
+                if (innerElement[0] != ""){
+                    console.log(innerElement[1])
+                    this.groundGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2),innerElement[0]).angle = innerElement[1]
+                }
+                
+            }
+
+            
+        }
+
+        
+        this.character = this.physics.add.sprite(characterSpawn[0]*gameOptions.widthOfTile+(72/2),characterSpawn[1]*gameOptions.widthOfTile-(72/2),"characterIdle",0);
+
+    }
+
+    levelEssentialLoad(){
         this.background = this.add.image(0,0,"bg").setOrigin(0,0);
         this.background.displayWidth = gameOptions.windowWidth;
         this.background.displayHeight = gameOptions.windowHeight;
@@ -196,17 +281,25 @@ class PlayGame extends Phaser.Scene {
             allowGravity: false
         })
 
-        for (let index = 0; index < gameOptions.windowWidth/gameOptions.widthOfTile; index++) {
-            this.groundGroup.create((index*gameOptions.widthOfTile),(gameOptions.windowHeight-gameOptions.widthOfTile),("innerBlock")).setOrigin(0,0);
-            
+        for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
+            this.groundGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(gameOptions.windowHeight-gameOptions.widthOfTile)+(gameOptions.widthOfTile/2),("innerBlock"));
         }
-        for (let index = 0; index < gameOptions.windowWidth/gameOptions.widthOfTile; index++) {
-            this.groundGroup.create((index*gameOptions.widthOfTile),(gameOptions.windowHeight-gameOptions.widthOfTile),("sideBlock")).setOrigin(0,0);
-            
+        
+
+    }
+
+    initializeLevelToEmpty(level){
+        let indexY = 0
+        let indexZ = 0
+        while(indexZ < 14){
+            level.push([])
+            while(indexY < 25){
+                level[indexZ].push(["",0])
+                indexY++
+            }
+            indexY = 0
+            indexZ++
         }
-
-
-
     }
 }
 
