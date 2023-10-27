@@ -206,10 +206,6 @@ class PlayGame extends Phaser.Scene {
         //loads
         this.loadNextLevel()
         this.loadHud()
-
-        /*this.movableObjectGroup = new MovableObjectGroup(this)
-        this.movableObjectGroup.create(this,"innerBlock",[100,100],[200,200])
-        this.movableObjectGroup.update(this)*/
     }
 
     update () {
@@ -862,55 +858,6 @@ class Bullet extends Phaser.Physics.Arcade.Sprite {
             }
         }
     }
-
-
 }
 
-/*class MovableObjectGroup extends Phaser.Physics.Arcade.Group{
-    constructor(scene){
-        super(scene.physics.world, scene)
-        this.setActive(true)
-        this.setVisible(true)
-    }
-
-
-    create(scene, texture, point1, point2){
-        let newObject = new MovableObject(scene,texture, point1, point2)
-        super.add(newObject, true)
-    }
-    
-    update(scene){
-        let childern = this.getChildren()
-        childern.forEach(element => {
-            element.update()
-        });
-    }
-}
-
-
-class MovableObject extends Phaser.Physics.Arcade.Image{
-    constructor(scene,texture, point1, point2){
-        super(scene,point1[0],point1[1],texture)
-        this.point1 = point1
-        this.point2 = point2
-        this.nextPoint = point2
-        this.setActive(true)
-        this.setVisible(true)
-
-        console.log(this)
-        scene.physics.moveTo(this,this.nextPoint[0],this.nextPoint[1],200)
-    }
-
-    update(scene){
-        this.distance = Math.sqrt((this.nextPoint[0]-this.x)**2+(this.nextPoint[1]-this.y)**2)
-        console.log(this.distance)
-        if (this.distance < 3) {
-            if (this.nextPoint = this.point1){
-                this.nextPoint = this.point2
-            } else {
-                this.nextPoint = this.point1
-            }
-            scene.physics.moveTo(this,this.nextPoint[0],this.nextPoint[1],200)
-        }
-    }
-}*/
+/*EOF*/
