@@ -426,6 +426,7 @@ class PlayGame extends Phaser.Scene {
         } else {
             this.scores.push({name: "player", score: this.money})
             this.money = 0 
+            this.moneyText.setText(this.money)
             this.showScoreBoard()
         }
     }
