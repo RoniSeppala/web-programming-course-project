@@ -44,7 +44,10 @@ class PlayGame extends Phaser.Scene {
     }
 
     preload () {//all preloading stuffz
+        //background
         this.load.image("bg","assets/stageObjects/Background/Background.png")
+
+        //Stage Tiles
         this.load.image("sideBlock","assets/stageObjects/Tiles/IndustrialTile_05.png")
         this.load.image("innerBlock", "assets/stageObjects/Tiles/IndustrialTile_21.png")
         this.load.image("innerCornerSide", "assets/stageObjects/Tiles/IndustrialTile_17.png")
@@ -56,14 +59,32 @@ class PlayGame extends Phaser.Scene {
         this.load.image("redBlockRight", "assets/stageObjects/Tiles/IndustrialTile_60.png")
         this.load.image("doorBlock", "assets/stageObjects/Tiles/IndustrialTile_54.png")
         this.load.image("finishBlock", "assets/stageObjects/Objects/Flag.png")
+
+        //character sprites
         this.load.spritesheet("characterIdle", "assets/character/Idle.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterWalk","assets/character/Walk.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterJump","assets/character/Attack4.png",{frameWidth: 72, frameHeight: 72})
+
+        //objects
         this.load.spritesheet("bullet","assets/character/Bullet.png",{frameWidth: 12, frameHeight: 6, startFrame: 1, endFrame: 1})
         this.load.image("reticle","assets/reticle.png")
         this.load.spritesheet("card","assets/animatedObjects/Card.png",{frameWidth: 24, frameHeight: 24})
         this.load.spritesheet("money","assets/animatedObjects/Money.png",{frameWidth: 24, frameHeight: 24})
+
+        //enemies
         this.load.spritesheet("enemyDestroyer","assets/enemies/Destroyer/Idle.png",{frameWidth:128, frameHeight:128})
+
+        //score
+        this.load.image("scoreBoardBase","assets/scoreBoardBase.png")
+        this.load.html("nameform","assets/text/nameform.html")
+        this.load.image("play","assets/play.png")
+
+        //load audio elements
+        this.load.audio("jumpSound","assets/audio/phaseJump1.mp3")
+        this.load.audio("jetpackSound","assets/audio/lowDown.mp3")
+        this.load.audio("pickMoney","assets/audio/phaserUp3.mp3")
+        this.load.audio("pickCard","assets/audio/phaserUp6.mp3")
+        this.load.audio("backgroundMusic","assets/music/backGroundMusic.mp3")
 
     }
 
@@ -93,11 +114,13 @@ class PlayGame extends Phaser.Scene {
         })
         this.character = this.physics.add.sprite(200,200,"characterIdle",0);
         this.reticle = this.add.image(-gameOptions.windowWidth/2,-gameOptions.windowHeight/2,"reticle")
+        this.reticle.setDepth(5)
         this.moneyGroup = this.physics.add.group({})
         this.cardGroup = this.physics.add.group({})
         this.enemyDestroyerGroup = new EnemyDestroyerGroup(this)
         this.bulletGroup = new BulletGroup(this);
         this.moveLevelTrigger = this.physics.add.image(200,200,"finishBlock")
+        this.levelTextGroup = this.add.group({classType: Phaser.GameObjects.Text});
 
         //initialization
         this.hasCard = -1 //-1 for not in leve, 0 for not aquired, 1 for aquired
@@ -112,6 +135,16 @@ class PlayGame extends Phaser.Scene {
         this.character.jumpAnimationTimeCounter = 0;
         this.money = 0
         this.nextLevel = 1
+        this.scores = [{name: "example", score: 500}]
+        this.textScore = ""
+        this.finishAllowedToHit = true
+
+        //load scoreboard elements
+        this.scoreboardBack = this.add.image(gameOptions.windowWidth/2,gameOptions.windowHeight/2,"scoreBoardBase")        
+        this.scoreTitleText = this.add.text(gameOptions.windowWidth/2,gameOptions.windowHeight/2-110,"SCORES", {fontSize: "26px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' }).setOrigin(0.5,0.5)
+        this.scoreText = this.add.text(gameOptions.windowWidth/2,gameOptions.windowHeight/2-80,this.textScore, {fontSize: "16px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' }).setOrigin(0.5,0)
+        this.playButton = this.add.image(gameOptions.windowWidth/2,gameOptions.windowHeight/2+100,"play").setDepth(20)
+        this.setScoreBoardInVisible()
 
         //relations
         this.physics.add.collider(this.character, this.groundGroup);
@@ -120,7 +153,7 @@ class PlayGame extends Phaser.Scene {
         this.physics.add.overlap(this.character, this.cardGroup, this.collectCard , null, this)
         this.physics.add.overlap(this.character,this.moneyGroup, this.collectMoney , null , this)
         this.physics.add.overlap(this.bulletGroup,this.groundGroup,this.bulletTouchGround, null, this)
-        this.physics.add.overlap(this.character,this.moveLevelTrigger,this.loadNextLevel,null,this)
+        this.physics.add.overlap(this.character,this.moveLevelTrigger,this.finishFlagHit,null,this)
 
 
         //bullet listener and add resqueplane + box around view
@@ -139,6 +172,23 @@ class PlayGame extends Phaser.Scene {
         for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
             this.groundRescueGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(-17),("innerBlock"));
         }
+
+
+
+        //add sounds
+        this.jumpSound = this.sound.add("jumpSound")
+        this.jetpackSound = this.sound.add("jetpackSound")
+        this.jetpackSound.loop = true
+        this.jetpackSound.rate = 3
+        this.jetpackSound.play()
+        this.jetpackSound.pause()
+        this.moneySound = this.sound.add("pickMoney")
+        this.cardSound = this.sound.add("pickCard")
+        this.bgMusic = this.sound.add("backgroundMusic")
+        this.bgMusic.loop = true
+        this.bgMusic.rate = 1
+        this.bgMusic.play()
+        this.bgMusic.volume = 0.2
         
 
 
@@ -172,19 +222,23 @@ class PlayGame extends Phaser.Scene {
 
         //jump logic
         if(this.character.hasHeldJumpFor > 1 && this.character.hasTouchedGroundFor > 4 && this.character.jumpcount == 1) { //normal jump
+            this.jumpSound.play()
             this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
             this.character.jumpcount = 0;
             this.character.hasTouchedGroundFor = 0;
             this.character.jumpAnimationCounter = 1;
-        }else if(this.cursors.up.isDown && this.character.jumpcount == 0 && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
+        }else if(this.cursors.up.isDown && (this.character.jumpcount == 0 || this.character.jumpcount == 1) && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
             //this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
-            this.character.jumpcount = this.character.jumpcount - 1
+            this.character.jumpAnimationCounter = 1;
+            this.character.jumpcount = this.character.jumpcount = -1
         }else if (this.character.jumpcount == -1 && this.character.doubleJumpTimer < gameOptions.doubleJumpFrames && this.character.hasHeldJumpFor > 3){ //use jetpack
             this.character.body.velocity.y = -(gameOptions.jetPackLiftGravity)*((gameOptions.doubleJumpFrames-this.character.doubleJumpTimer)/gameOptions.doubleJumpFrames)//caluclation so jetpack power gradually goes down
+            this.jetpackSound.resume()
         }else if(this.character.hasTouchedGroundFor > 4) {
             this.character.jumpcount = 1
             this.character.doubleJumpTimer = 0
             this.character.jumpAnimationCounter = 0;
+            this.jetpackSound.pause()
         }
 
         //character animation handling
@@ -244,6 +298,64 @@ class PlayGame extends Phaser.Scene {
 
     }
 
+    showScoreBoard(){
+        this.finishAllowedToHit = false
+        this.scores.sort((a,b) => {
+            const scoreA = a.score
+            const scoreB = b.score
+
+            if (scoreA < scoreB) {
+                return 1;
+              }
+              if (scoreA > scoreB) {
+                return -1;
+              }
+            
+            
+            return 0;
+        })
+
+
+        this.textScore = ""
+
+        for (let index = 0; index < this.scores.length; index++) {
+            const element = this.scores[index];
+            this.textScore = this.textScore + element.name + "   " + element.score + "\n\n"
+            if (index == 4){
+                break
+            }
+        }
+
+        this.setScoreBoardVisible()
+        this.scoreText = this.add.text(gameOptions.windowWidth/2,gameOptions.windowHeight/2-80,this.textScore, {fontSize: "16px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' }).setOrigin(0.5,0)
+
+        this.playButton.setInteractive().on('pointerdown', function(pointer){
+            this.nextLevel = 1
+            this.setScoreBoardInVisible()
+            this.loadNextLevel()
+            this.finishAllowedToHit = true
+        },this)
+
+       
+
+    }
+
+    setScoreBoardInVisible(){
+        this.scoreboardBack.setVisible(false)
+        this.scoreTitleText.setVisible(false)
+        this.scoreText.destroy()
+        this.playButton.setVisible(false)
+        this.playButton.setActive(false)
+    }
+
+    setScoreBoardVisible(){
+        this.scoreboardBack.setVisible(true)
+        this.scoreTitleText.setVisible(true)
+        this.scoreText.setVisible(true)
+        this.playButton.setVisible(true)
+        this.playButton.setActive(true)
+    }
+
     loadAnims(){
         this.anims.create({
             key: "walk",
@@ -261,7 +373,7 @@ class PlayGame extends Phaser.Scene {
 
         this.anims.create({
             key: "jump",
-            frames: this.anims.generateFrameNumbers("characterJump", {start: 1, end: 2}),
+            frames: this.anims.generateFrameNumbers("characterJump", {start: 2, end: 2}),
             frameRate: 2,
             repeat: -1
         })
@@ -296,17 +408,25 @@ class PlayGame extends Phaser.Scene {
 
     }
 
+    finishFlagHit(){
+        if (this.finishAllowedToHit){
+            this.loadNextLevel()
+        }
+    }
+
     loadNextLevel(){
-        this.unloadLevel()
         if (this.nextLevel == 1){
+            this.unloadLevel()
             this.loadLevel1()
             this.nextLevel = 2
         } else if (this.nextLevel == 2){
+            this.unloadLevel()
             this.loadLevel2()
             this.nextLevel = 3
         } else {
-            this.loadLevel1()
-            this.nextLevel = 2
+            this.scores.push({name: "player", score: this.money})
+            this.money = 0 
+            this.showScoreBoard()
         }
     }
 
@@ -337,6 +457,13 @@ class PlayGame extends Phaser.Scene {
         const childrenCard = this.cardGroup.getChildren()
         for (let index = childrenCard.length; index >= 0; index--) {
             const element = childrenCard[index];
+            if (element){
+                element.destroy()
+            }
+        }
+        const childrenText = this.levelTextGroup.getChildren()
+        for (let index = childrenText.length; index >= 0; index--) {
+            const element = childrenText[index];
             if (element){
                 element.destroy()
             }
@@ -383,6 +510,8 @@ class PlayGame extends Phaser.Scene {
             level1PhysicsObjects[13-index][16] = ["innerBlock",0]
             
         }
+
+        this.levelTextGroup.create(50,50,"Get to flag to finish", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "black"}).setOrigin(0,0)
 
 
 
@@ -437,6 +566,9 @@ class PlayGame extends Phaser.Scene {
         level2Objects[12][21] = ["money"]
 
 
+
+        this.levelTextGroup.create(500,300,"Collect money to get score", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "black"}).setOrigin(0,0)
+        this.levelTextGroup.create(450,50,"Collect the card to open doors", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "maroon"}).setOrigin(0,0)
 
 
 
@@ -495,14 +627,12 @@ class PlayGame extends Phaser.Scene {
             
         }
 
-        this.character.x = characterSpawn[0]*gameOptions.widthOfTile+(72/2)
-        this.character.y = characterSpawn[1]*gameOptions.widthOfTile-(72/2)
+        this.character.x = characterSpawn[0]*gameOptions.widthOfTile+(72/2)+10
+        this.character.y = characterSpawn[1]*gameOptions.widthOfTile-(72/2)-1
         this.character.isFacingLeft = false;
 
         this.moveLevelTrigger.x = finishBlock[0]*gameOptions.widthOfTile+16
         this.moveLevelTrigger.y = finishBlock[1]*gameOptions.widthOfTile+32
-
-
     }
 
 
@@ -577,6 +707,7 @@ class PlayGame extends Phaser.Scene {
         start.disableBody(true,true)
         this.money += 500
         this.moneyText.setText(this.money)
+        this.moneySound.play()
 
     }
 
@@ -585,6 +716,7 @@ class PlayGame extends Phaser.Scene {
         this.hasCard = true
         this.cardText.setText("Card Aquired")
         this.toggleBlocksOff()
+        this.cardSound.play()
     }
 
 }
