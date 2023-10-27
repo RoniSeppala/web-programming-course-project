@@ -516,7 +516,7 @@ class PlayGame extends Phaser.Scene {
             
         }
 
-        this.levelTextGroup.create(50,50,"Get to flag to finish", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "black"}).setOrigin(0,0)
+        this.levelTextGroup.create(50,50,"Get to flag to finish\nArrow keys / touch buttons to move, Mouse/touch to shoot", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "black"}).setOrigin(0,0)
 
 
 
