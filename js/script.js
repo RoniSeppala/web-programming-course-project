@@ -29,7 +29,7 @@ window.onload = function() {
                 gravity: {
                     y: 0
                 },
-                debug: true
+                debug: false
             }
         },
         scene: PlayGame
@@ -44,7 +44,10 @@ class PlayGame extends Phaser.Scene {
     }
 
     preload () {//all preloading stuffz
+        //background
         this.load.image("bg","assets/stageObjects/Background/Background.png")
+
+        //Stage Tiles
         this.load.image("sideBlock","assets/stageObjects/Tiles/IndustrialTile_05.png")
         this.load.image("innerBlock", "assets/stageObjects/Tiles/IndustrialTile_21.png")
         this.load.image("innerCornerSide", "assets/stageObjects/Tiles/IndustrialTile_17.png")
@@ -55,14 +58,42 @@ class PlayGame extends Phaser.Scene {
         this.load.image("redBlockMid", "assets/stageObjects/Tiles/IndustrialTile_59.png")
         this.load.image("redBlockRight", "assets/stageObjects/Tiles/IndustrialTile_60.png")
         this.load.image("doorBlock", "assets/stageObjects/Tiles/IndustrialTile_54.png")
+        this.load.image("finishBlock", "assets/stageObjects/Objects/Flag.png")
+
+        //character sprites
         this.load.spritesheet("characterIdle", "assets/character/Idle.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterWalk","assets/character/Walk.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterJump","assets/character/Attack4.png",{frameWidth: 72, frameHeight: 72})
+
+        //objects
         this.load.spritesheet("bullet","assets/character/Bullet.png",{frameWidth: 12, frameHeight: 6, startFrame: 1, endFrame: 1})
         this.load.image("reticle","assets/reticle.png")
         this.load.spritesheet("card","assets/animatedObjects/Card.png",{frameWidth: 24, frameHeight: 24})
         this.load.spritesheet("money","assets/animatedObjects/Money.png",{frameWidth: 24, frameHeight: 24})
+
+        //enemies
         this.load.spritesheet("enemyDestroyer","assets/enemies/Destroyer/Idle.png",{frameWidth:128, frameHeight:128})
+
+        //score
+        this.load.image("scoreBoardBase","assets/scoreBoardBase.png")
+        this.load.html("nameform","assets/text/nameform.html")
+        this.load.image("play","assets/play.png")
+
+        //load audio elements
+        this.load.audio("jumpSound","assets/audio/phaseJump1.mp3")
+        this.load.audio("jetpackSound","assets/audio/lowDown.mp3")
+        this.load.audio("pickMoney","assets/audio/phaserUp3.mp3")
+        this.load.audio("pickCard","assets/audio/phaserUp6.mp3")
+        this.load.audio("backgroundMusic","assets/music/backGroundMusic.mp3")
+
+        //load arrowkey
+        this.load.image("arrow","assets/arrowKey.png")
+        this.isDownArrowDown = false
+        this.isUpArrowDown = false
+        this.isLeftArrowDown = false
+        this.isRightArrowDown = false
+
+
 
     }
 
@@ -81,16 +112,24 @@ class PlayGame extends Phaser.Scene {
             allowGravity: false
         })
 
+        this.groundRescueGroup = this.physics.add.group({
+            immovable: true,
+            allowGravity: false
+        })
+
         this.groundToggleGroup = this.physics.add.group({
             immovable: true,
             allowGravity: false
         })
         this.character = this.physics.add.sprite(200,200,"characterIdle",0);
         this.reticle = this.add.image(-gameOptions.windowWidth/2,-gameOptions.windowHeight/2,"reticle")
+        this.reticle.setDepth(5)
         this.moneyGroup = this.physics.add.group({})
         this.cardGroup = this.physics.add.group({})
         this.enemyDestroyerGroup = new EnemyDestroyerGroup(this)
         this.bulletGroup = new BulletGroup(this);
+        this.moveLevelTrigger = this.physics.add.image(200,200,"finishBlock")
+        this.levelTextGroup = this.add.group({classType: Phaser.GameObjects.Text});
 
         //initialization
         this.hasCard = -1 //-1 for not in leve, 0 for not aquired, 1 for aquired
@@ -104,26 +143,68 @@ class PlayGame extends Phaser.Scene {
         this.character.jumpAnimationCounter = 0;
         this.character.jumpAnimationTimeCounter = 0;
         this.money = 0
+        this.nextLevel = 1
+        this.scores = [{name: "example", score: 500}]
+        this.textScore = ""
+        this.finishAllowedToHit = true
+
+        //load scoreboard elements
+        this.scoreboardBack = this.add.image(gameOptions.windowWidth/2,gameOptions.windowHeight/2,"scoreBoardBase")        
+        this.scoreTitleText = this.add.text(gameOptions.windowWidth/2,gameOptions.windowHeight/2-110,"SCORES", {fontSize: "26px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' }).setOrigin(0.5,0.5)
+        this.scoreText = this.add.text(gameOptions.windowWidth/2,gameOptions.windowHeight/2-80,this.textScore, {fontSize: "16px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' }).setOrigin(0.5,0)
+        this.playButton = this.add.image(gameOptions.windowWidth/2,gameOptions.windowHeight/2+100,"play").setDepth(20)
+        this.setScoreBoardInVisible()
 
         //relations
         this.physics.add.collider(this.character, this.groundGroup);
+        this.physics.add.collider(this.character, this.groundRescueGroup);
         this.cursors = this.input.keyboard.createCursorKeys()
         this.physics.add.overlap(this.character, this.cardGroup, this.collectCard , null, this)
         this.physics.add.overlap(this.character,this.moneyGroup, this.collectMoney , null , this)
         this.physics.add.overlap(this.bulletGroup,this.groundGroup,this.bulletTouchGround, null, this)
+        this.physics.add.overlap(this.character,this.moveLevelTrigger,this.finishFlagHit,null,this)
 
 
-        //bullet listener and add resqueplane
+        //bullet listener and add resqueplane + box around view
         this.addEvents();
         for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
-            this.groundGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(gameOptions.windowHeight-gameOptions.widthOfTile)+(gameOptions.widthOfTile/2),("innerBlock"));
+            this.groundRescueGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(gameOptions.windowHeight-gameOptions.widthOfTile)+(gameOptions.widthOfTile/2),("innerBlock"));
         }
+        for (let index = 0; index < (gameOptions.windowHeight/gameOptions.widthOfTile); index++) {
+            this.groundRescueGroup.create((-16),((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)),("innerBlock"));
+            
+        }
+        for (let index = 0; index < (gameOptions.windowHeight/gameOptions.widthOfTile); index++) {
+            this.groundRescueGroup.create((-16+(26*gameOptions.widthOfTile)),((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)),("innerBlock"));
+            
+        }
+        for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
+            this.groundRescueGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(-17),("innerBlock"));
+        }
+
+
+
+        //add sounds
+        this.jumpSound = this.sound.add("jumpSound")
+        this.jetpackSound = this.sound.add("jetpackSound")
+        this.jetpackSound.loop = true
+        this.jetpackSound.rate = 3
+        this.jetpackSound.play()
+        this.jetpackSound.pause()
+        this.moneySound = this.sound.add("pickMoney")
+        this.cardSound = this.sound.add("pickCard")
+        this.bgMusic = this.sound.add("backgroundMusic")
+        this.bgMusic.loop = true
+        this.bgMusic.rate = 1
+        this.bgMusic.play()
+        this.bgMusic.volume = 0.2
+        
 
 
 
 
         //loads
-        this.loadLevel2()
+        this.loadNextLevel()
         this.loadHud()
 
         /*this.movableObjectGroup = new MovableObjectGroup(this)
@@ -133,12 +214,12 @@ class PlayGame extends Phaser.Scene {
 
     update () {
         //character movements
-        if(this.cursors.left.isDown) {
+        if(this.cursors.left.isDown || this.isLeftArrowDown) {
             this.character.setFlipX(true)
             this.character.isFacingLeft = true;
             this.character.body.velocity.x = -gameOptions.characterSpeed
         }
-        else if(this.cursors.right.isDown) {
+        else if(this.cursors.right.isDown || this.isRightArrowDown) {
             this.character.setFlipX(false)
             this.character.isFacingLeft = false;
             this.character.body.velocity.x = gameOptions.characterSpeed
@@ -149,27 +230,31 @@ class PlayGame extends Phaser.Scene {
 
         //jump logic
         if(this.character.hasHeldJumpFor > 1 && this.character.hasTouchedGroundFor > 4 && this.character.jumpcount == 1) { //normal jump
+            this.jumpSound.play()
             this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
             this.character.jumpcount = 0;
             this.character.hasTouchedGroundFor = 0;
             this.character.jumpAnimationCounter = 1;
-        }else if(this.cursors.up.isDown && this.character.jumpcount == 0 && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
+        }else if((this.cursors.up.isDown || this.isUpArrowDown) && (this.character.jumpcount == 0 || this.character.jumpcount == 1) && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
             //this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
-            this.character.jumpcount = this.character.jumpcount - 1
+            this.character.jumpAnimationCounter = 1;
+            this.character.jumpcount = this.character.jumpcount = -1
         }else if (this.character.jumpcount == -1 && this.character.doubleJumpTimer < gameOptions.doubleJumpFrames && this.character.hasHeldJumpFor > 3){ //use jetpack
             this.character.body.velocity.y = -(gameOptions.jetPackLiftGravity)*((gameOptions.doubleJumpFrames-this.character.doubleJumpTimer)/gameOptions.doubleJumpFrames)//caluclation so jetpack power gradually goes down
+            this.jetpackSound.resume()
         }else if(this.character.hasTouchedGroundFor > 4) {
             this.character.jumpcount = 1
             this.character.doubleJumpTimer = 0
             this.character.jumpAnimationCounter = 0;
+            this.jetpackSound.pause()
         }
 
         //character animation handling
         if (this.character.jumpcount == 1){
-            if(this.cursors.left.isDown) {
+            if(this.cursors.left.isDown || this.isLeftArrowDown) {
                 this.character.anims.play("walk", true)
             }
-            else if(this.cursors.right.isDown) {
+            else if(this.cursors.right.isDown || this.isRightArrowDown) {
                 this.character.anims.play("walk", true)
             }
             else {
@@ -185,13 +270,13 @@ class PlayGame extends Phaser.Scene {
 
 
         //frame trackers (maybe combine later)
-        if (this.cursors.up.isDown){//tracker for how long has up been held
+        if (this.cursors.up.isDown || this.isUpArrowDown){//tracker for how long has up been held
             this.character.hasReleasedJumpFor = 0;
         } else {
             this.character.hasReleasedJumpFor = this.character.hasReleasedJumpFor + 1;
         }
 
-        if (!this.cursors.up.isDown){//tracker for how long has up been released
+        if (!this.cursors.up.isDown && !this.isUpArrowDown){//tracker for how long has up been released
             this.character.hasHeldJumpFor = 0;
         } else {
             this.character.hasHeldJumpFor = this.character.hasHeldJumpFor + 1;
@@ -221,6 +306,64 @@ class PlayGame extends Phaser.Scene {
 
     }
 
+    showScoreBoard(){
+        this.finishAllowedToHit = false
+        this.scores.sort((a,b) => {
+            const scoreA = a.score
+            const scoreB = b.score
+
+            if (scoreA < scoreB) {
+                return 1;
+              }
+              if (scoreA > scoreB) {
+                return -1;
+              }
+            
+            
+            return 0;
+        })
+
+
+        this.textScore = ""
+
+        for (let index = 0; index < this.scores.length; index++) {
+            const element = this.scores[index];
+            this.textScore = this.textScore + element.name + "   " + element.score + "\n\n"
+            if (index == 3){
+                break
+            }
+        }
+
+        this.setScoreBoardVisible()
+        this.scoreText = this.add.text(gameOptions.windowWidth/2,gameOptions.windowHeight/2-80,this.textScore, {fontSize: "16px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' }).setOrigin(0.5,0)
+
+        this.playButton.setInteractive().on('pointerdown', function(pointer){
+            this.nextLevel = 1
+            this.setScoreBoardInVisible()
+            this.loadNextLevel()
+            this.finishAllowedToHit = true
+        },this)
+
+       
+
+    }
+
+    setScoreBoardInVisible(){
+        this.scoreboardBack.setVisible(false)
+        this.scoreTitleText.setVisible(false)
+        this.scoreText.destroy()
+        this.playButton.setVisible(false)
+        this.playButton.setActive(false)
+    }
+
+    setScoreBoardVisible(){
+        this.scoreboardBack.setVisible(true)
+        this.scoreTitleText.setVisible(true)
+        this.scoreText.setVisible(true)
+        this.playButton.setVisible(true)
+        this.playButton.setActive(true)
+    }
+
     loadAnims(){
         this.anims.create({
             key: "walk",
@@ -238,7 +381,7 @@ class PlayGame extends Phaser.Scene {
 
         this.anims.create({
             key: "jump",
-            frames: this.anims.generateFrameNumbers("characterJump", {start: 1, end: 2}),
+            frames: this.anims.generateFrameNumbers("characterJump", {start: 2, end: 2}),
             frameRate: 2,
             repeat: -1
         })
@@ -273,12 +416,76 @@ class PlayGame extends Phaser.Scene {
 
     }
 
+    finishFlagHit(){
+        if (this.finishAllowedToHit){
+            this.loadNextLevel()
+        }
+    }
+
+    loadNextLevel(){
+        if (this.nextLevel == 1){
+            this.unloadLevel()
+            this.loadLevel1()
+            this.nextLevel = 2
+        } else if (this.nextLevel == 2){
+            this.unloadLevel()
+            this.loadLevel2()
+            this.nextLevel = 3
+        } else {
+            this.scores.push({name: "player", score: this.money})
+            this.money = 0 
+            this.moneyText.setText(this.money)
+            this.showScoreBoard()
+        }
+    }
+
+    unloadLevel(){
+        const childrenOfGround = this.groundGroup.getChildren()
+        for (let index = childrenOfGround.length; index >= 0; index--) {
+            const element = childrenOfGround[index];
+            if (element){
+                element.destroy()
+            }
+        }
+
+        const childrenOfToggleable = this.groundToggleGroup.getChildren()
+        for (let index = childrenOfToggleable.length; index >= 0; index--) {
+            const element = childrenOfToggleable[index];
+            if (element){
+                element.destroy()
+            }
+        }
+
+        const childrenMoney = this.moneyGroup.getChildren()
+        for (let index = childrenMoney.length; index >= 0; index--) {
+            const element = childrenMoney[index];
+            if (element){
+                element.destroy()
+            }
+        }
+        const childrenCard = this.cardGroup.getChildren()
+        for (let index = childrenCard.length; index >= 0; index--) {
+            const element = childrenCard[index];
+            if (element){
+                element.destroy()
+            }
+        }
+        const childrenText = this.levelTextGroup.getChildren()
+        for (let index = childrenText.length; index >= 0; index--) {
+            const element = childrenText[index];
+            if (element){
+                element.destroy()
+            }
+        }
+    }
+
 
     loadLevel1() {//level width 25 blocks, level height 14 blocks
         let level1PhysicsObjects = [] //should be three dimensional matrix as follows: [z(height)][y(width)][0,1], where 0 is the name of the block in string form and 1 is the roation of the block in int form
         let level1ToggleObjects = []
         let level1Objects = []
         let characterSpawnBlock = [0,13]
+        let finishBlock = [23,3]
         this.initializeLevelToEmpty(level1PhysicsObjects)
         this.initializeLevelToEmpty(level1ToggleObjects)
         this.initializeLevelToEmpty(level1Objects)
@@ -313,9 +520,11 @@ class PlayGame extends Phaser.Scene {
             
         }
 
+        this.levelTextGroup.create(50,50,"Get to flag to finish", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "black"}).setOrigin(0,0)
 
 
-        this.loadLevel(level1PhysicsObjects,characterSpawnBlock,level1ToggleObjects,level1Objects)
+
+        this.loadLevel(level1PhysicsObjects,characterSpawnBlock,level1ToggleObjects,level1Objects,finishBlock)
 
     }
 
@@ -324,6 +533,7 @@ class PlayGame extends Phaser.Scene {
         let level2ToggleObjects = []
         let level2Objects = []
         let characterSpawnBlock = [0,13]
+        let finishBlock = [1,1]
         this.initializeLevelToEmpty(level2PhysicsObjects)
         this.initializeLevelToEmpty(level2ToggleObjects)
         this.initializeLevelToEmpty(level2Objects)
@@ -366,13 +576,17 @@ class PlayGame extends Phaser.Scene {
 
 
 
+        this.levelTextGroup.create(500,300,"Collect money to get score", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "black"}).setOrigin(0,0)
+        this.levelTextGroup.create(450,50,"Collect the card to open doors", {fontSize: "25px",fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif', color: "maroon"}).setOrigin(0,0)
 
 
-        this.loadLevel(level2PhysicsObjects,characterSpawnBlock,level2ToggleObjects,level2Objects)
+
+        this.loadLevel(level2PhysicsObjects,characterSpawnBlock,level2ToggleObjects,level2Objects,finishBlock)
 
     }
+
     
-    loadLevel(levelPhysicsData,characterSpawn,levelToggleObjects,otherObjects){
+    loadLevel(levelPhysicsData,characterSpawn,levelToggleObjects,otherObjects,finishBlock){
         
         for (let indexZ = 0; indexZ < levelPhysicsData.length; indexZ++) {
             const element = levelPhysicsData[indexZ];
@@ -414,6 +628,7 @@ class PlayGame extends Phaser.Scene {
                     this.moneyGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2)).anims.play("moneyAnimated",true)
                 } else if (innerElement[0] == "card"){
                     this.cardGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2)).anims.play("cardAnimated",true)
+                    this.toggleGroupCollider = this.physics.add.collider(this.character, this.groundToggleGroup);
                 }
                 
             }
@@ -421,10 +636,12 @@ class PlayGame extends Phaser.Scene {
             
         }
 
-        this.character.x = characterSpawn[0]*gameOptions.widthOfTile+(72/2)
-        this.character.y = characterSpawn[1]*gameOptions.widthOfTile-(72/2)
+        this.character.x = characterSpawn[0]*gameOptions.widthOfTile+(72/2)+10
+        this.character.y = characterSpawn[1]*gameOptions.widthOfTile-(72/2)-1
         this.character.isFacingLeft = false;
 
+        this.moveLevelTrigger.x = finishBlock[0]*gameOptions.widthOfTile+16
+        this.moveLevelTrigger.y = finishBlock[1]*gameOptions.widthOfTile+32
     }
 
 
@@ -432,6 +649,7 @@ class PlayGame extends Phaser.Scene {
 
         this.groundToggleGroup.setVisible(false)
         this.groundToggleGroup.setActive(false)
+        this.toggleGroupCollider.destroy()
 
     }
 
@@ -458,7 +676,7 @@ class PlayGame extends Phaser.Scene {
 
     loadHud(){
         this.hudElementCard = this.physics.add.sprite(0,0,"card",0).setOrigin(0,0)
-        this.hudElementMoney = this.physics.add.sprite(0,18,"money",0).setOrigin(0,0)
+        this.hudElementMoney = this.physics.add.sprite(0,20,"money",0).setOrigin(0,0)
         
         this.hudElementCard.anims.play("cardAnimated",true)
         this.hudElementMoney.anims.play("moneyAnimated",true)
@@ -468,7 +686,47 @@ class PlayGame extends Phaser.Scene {
 
         if (this.hasCard) {
             this.cardText.setText("Card Aquired")
-        } 
+        }
+
+        this.arrowPositioning = [690,340]
+        this.upArrow = this.add.image(this.arrowPositioning[0],this.arrowPositioning[1],"arrow").setScale(1).setDepth(20)
+        this.downArrow = this.add.image(this.arrowPositioning[0],this.arrowPositioning[1]+64+5,"arrow").setAngle(180).setScale(1).setDepth(20)
+        this.leftArrow = this.add.image(this.arrowPositioning[0]-64-5,this.arrowPositioning[1]+64+5,"arrow").setAngle(270).setScale(1).setDepth(20)
+        this.rightArrow = this.add.image(this.arrowPositioning[0]+64+5,this.arrowPositioning[1]+64+5,"arrow").setAngle(90).setScale(1).setDepth(20)
+
+        
+        this.upArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isUpArrowDown = true
+        },this)
+
+        this.upArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isUpArrowDown = false
+        },this)
+
+        this.downArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isDownArrowDown = true
+        },this)
+
+        this.downArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isDownArrowDown = false
+        },this)
+
+        this.leftArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isLeftArrowDown = true
+        },this)
+
+        this.leftArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isLeftArrowDown = false
+        },this)
+
+        this.rightArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isRightArrowDown = true
+        },this)
+
+        this.rightArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isRightArrowDown = false
+        },this)
+        
 
     }
 
@@ -488,18 +746,17 @@ class PlayGame extends Phaser.Scene {
     }
 
     bulletTouchGround(bullet, end){
-        console.log("bullet touching ground")
         bullet.body.reset(-100,-100)
         bullet.setActive(false);
         bullet.setVisible(false);
         bullet.setGravity(0,0)
-        console.log(bullet)
     }
 
     collectMoney(character, start){ //for score
         start.disableBody(true,true)
         this.money += 500
         this.moneyText.setText(this.money)
+        this.moneySound.play()
 
     }
 
@@ -508,6 +765,7 @@ class PlayGame extends Phaser.Scene {
         this.hasCard = true
         this.cardText.setText("Card Aquired")
         this.toggleBlocksOff()
+        this.cardSound.play()
     }
 
 }
