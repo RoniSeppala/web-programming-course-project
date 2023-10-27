@@ -668,7 +668,7 @@ class PlayGame extends Phaser.Scene {
 
     loadHud(){
         this.hudElementCard = this.physics.add.sprite(0,0,"card",0).setOrigin(0,0)
-        this.hudElementMoney = this.physics.add.sprite(0,18,"money",0).setOrigin(0,0)
+        this.hudElementMoney = this.physics.add.sprite(0,20,"money",0).setOrigin(0,0)
         
         this.hudElementCard.anims.play("cardAnimated",true)
         this.hudElementMoney.anims.play("moneyAnimated",true)
