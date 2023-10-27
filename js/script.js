@@ -86,6 +86,15 @@ class PlayGame extends Phaser.Scene {
         this.load.audio("pickCard","assets/audio/phaserUp6.mp3")
         this.load.audio("backgroundMusic","assets/music/backGroundMusic.mp3")
 
+        //load arrowkey
+        this.load.image("arrow","assets/arrowKey.png")
+        this.isDownArrowDown = false
+        this.isUpArrowDown = false
+        this.isLeftArrowDown = false
+        this.isRightArrowDown = false
+
+
+
     }
 
     create () {
@@ -194,7 +203,6 @@ class PlayGame extends Phaser.Scene {
 
 
 
-
         //loads
         this.loadNextLevel()
         this.loadHud()
@@ -206,12 +214,12 @@ class PlayGame extends Phaser.Scene {
 
     update () {
         //character movements
-        if(this.cursors.left.isDown) {
+        if(this.cursors.left.isDown || this.isLeftArrowDown) {
             this.character.setFlipX(true)
             this.character.isFacingLeft = true;
             this.character.body.velocity.x = -gameOptions.characterSpeed
         }
-        else if(this.cursors.right.isDown) {
+        else if(this.cursors.right.isDown || this.isRightArrowDown) {
             this.character.setFlipX(false)
             this.character.isFacingLeft = false;
             this.character.body.velocity.x = gameOptions.characterSpeed
@@ -227,7 +235,7 @@ class PlayGame extends Phaser.Scene {
             this.character.jumpcount = 0;
             this.character.hasTouchedGroundFor = 0;
             this.character.jumpAnimationCounter = 1;
-        }else if(this.cursors.up.isDown && (this.character.jumpcount == 0 || this.character.jumpcount == 1) && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
+        }else if((this.cursors.up.isDown || this.isUpArrowDown) && (this.character.jumpcount == 0 || this.character.jumpcount == 1) && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
             //this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
             this.character.jumpAnimationCounter = 1;
             this.character.jumpcount = this.character.jumpcount = -1
@@ -243,10 +251,10 @@ class PlayGame extends Phaser.Scene {
 
         //character animation handling
         if (this.character.jumpcount == 1){
-            if(this.cursors.left.isDown) {
+            if(this.cursors.left.isDown || this.isLeftArrowDown) {
                 this.character.anims.play("walk", true)
             }
-            else if(this.cursors.right.isDown) {
+            else if(this.cursors.right.isDown || this.isRightArrowDown) {
                 this.character.anims.play("walk", true)
             }
             else {
@@ -262,13 +270,13 @@ class PlayGame extends Phaser.Scene {
 
 
         //frame trackers (maybe combine later)
-        if (this.cursors.up.isDown){//tracker for how long has up been held
+        if (this.cursors.up.isDown || this.isUpArrowDown){//tracker for how long has up been held
             this.character.hasReleasedJumpFor = 0;
         } else {
             this.character.hasReleasedJumpFor = this.character.hasReleasedJumpFor + 1;
         }
 
-        if (!this.cursors.up.isDown){//tracker for how long has up been released
+        if (!this.cursors.up.isDown && !this.isUpArrowDown){//tracker for how long has up been released
             this.character.hasHeldJumpFor = 0;
         } else {
             this.character.hasHeldJumpFor = this.character.hasHeldJumpFor + 1;
@@ -296,6 +304,7 @@ class PlayGame extends Phaser.Scene {
             this.character.jumpAnimationTimeCounter = 0
         }
 
+        console.log(this.character.hasHeldJumpFor)
     }
 
     showScoreBoard(){
@@ -321,7 +330,7 @@ class PlayGame extends Phaser.Scene {
         for (let index = 0; index < this.scores.length; index++) {
             const element = this.scores[index];
             this.textScore = this.textScore + element.name + "   " + element.score + "\n\n"
-            if (index == 4){
+            if (index == 3){
                 break
             }
         }
@@ -678,7 +687,47 @@ class PlayGame extends Phaser.Scene {
 
         if (this.hasCard) {
             this.cardText.setText("Card Aquired")
-        } 
+        }
+
+        this.arrowPositioning = [690,340]
+        this.upArrow = this.add.image(this.arrowPositioning[0],this.arrowPositioning[1],"arrow").setScale(1).setDepth(20)
+        this.downArrow = this.add.image(this.arrowPositioning[0],this.arrowPositioning[1]+64+5,"arrow").setAngle(180).setScale(1).setDepth(20)
+        this.leftArrow = this.add.image(this.arrowPositioning[0]-64-5,this.arrowPositioning[1]+64+5,"arrow").setAngle(270).setScale(1).setDepth(20)
+        this.rightArrow = this.add.image(this.arrowPositioning[0]+64+5,this.arrowPositioning[1]+64+5,"arrow").setAngle(90).setScale(1).setDepth(20)
+
+        
+        this.upArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isUpArrowDown = true
+        },this)
+
+        this.upArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isUpArrowDown = false
+        },this)
+
+        this.downArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isDownArrowDown = true
+        },this)
+
+        this.downArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isDownArrowDown = false
+        },this)
+
+        this.leftArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isLeftArrowDown = true
+        },this)
+
+        this.leftArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isLeftArrowDown = false
+        },this)
+
+        this.rightArrow.setInteractive().addListener('pointerdown', function(pointer){
+            this.isRightArrowDown = true
+        },this)
+
+        this.rightArrow.setInteractive().addListener('pointerup', function(pointer){
+            this.isRightArrowDown = false
+        },this)
+        
 
     }
 
