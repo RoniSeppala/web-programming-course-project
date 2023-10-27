@@ -29,7 +29,7 @@ window.onload = function() {
                 gravity: {
                     y: 0
                 },
-                debug: true
+                debug: false
             }
         },
         scene: PlayGame
@@ -304,7 +304,6 @@ class PlayGame extends Phaser.Scene {
             this.character.jumpAnimationTimeCounter = 0
         }
 
-        console.log(this.character.hasHeldJumpFor)
     }
 
     showScoreBoard(){
