@@ -49,6 +49,12 @@ class PlayGame extends Phaser.Scene {
         this.load.image("innerBlock", "assets/stageObjects/Tiles/IndustrialTile_21.png")
         this.load.image("innerCornerSide", "assets/stageObjects/Tiles/IndustrialTile_17.png")
         this.load.image("outerCornerSide", "assets/stageObjects/Tiles/IndustrialTile_04.png")
+        this.load.image("pipeMid", "assets/stageObjects/Tiles/IndustrialTile_61.png")
+        this.load.image("pipeEnd", "assets/stageObjects/Tiles/IndustrialTile_70.png")
+        this.load.image("redBlockLeft", "assets/stageObjects/Tiles/IndustrialTile_58.png")
+        this.load.image("redBlockMid", "assets/stageObjects/Tiles/IndustrialTile_59.png")
+        this.load.image("redBlockRight", "assets/stageObjects/Tiles/IndustrialTile_60.png")
+        this.load.image("doorBlock", "assets/stageObjects/Tiles/IndustrialTile_54.png")
         this.load.spritesheet("characterIdle", "assets/character/Idle.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterWalk","assets/character/Walk.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterJump","assets/character/Attack4.png",{frameWidth: 72, frameHeight: 72})
@@ -61,10 +67,35 @@ class PlayGame extends Phaser.Scene {
     }
 
     create () {
-        this.loadLevel2()
+        
+        this.loadAnims()
 
+        //background
+        this.background = this.add.image(0,0,"bg").setOrigin(0,0);
+        this.background.displayWidth = gameOptions.windowWidth;
+        this.background.displayHeight = gameOptions.windowHeight;
+        
+        //create all
+        this.groundGroup = this.physics.add.group({
+            immovable: true,
+            allowGravity: false
+        })
+
+        this.groundToggleGroup = this.physics.add.group({
+            immovable: true,
+            allowGravity: false
+        })
+        this.character = this.physics.add.sprite(200,200,"characterIdle",0);
+        this.reticle = this.add.image(-gameOptions.windowWidth/2,-gameOptions.windowHeight/2,"reticle")
+        this.moneyGroup = this.physics.add.group({})
+        this.cardGroup = this.physics.add.group({})
+        this.enemyDestroyerGroup = new EnemyDestroyerGroup(this)
+        this.bulletGroup = new BulletGroup(this);
+
+        //initialization
+        this.hasCard = -1 //-1 for not in leve, 0 for not aquired, 1 for aquired
+        this.character.isFacingLeft = false;
         this.character.body.gravity.y = gameOptions.characterGravity;
-        this.physics.add.collider(this.character, this.groundGroup);
         this.character.jumpcount = 1;
         this.character.hasReleasedJumpFor = 0;
         this.character.hasHeldJumpFor = 0;
@@ -72,28 +103,125 @@ class PlayGame extends Phaser.Scene {
         this.character.doubleJumpTimer = 0;
         this.character.jumpAnimationCounter = 0;
         this.character.jumpAnimationTimeCounter = 0;
-        this.cursors = this.input.keyboard.createCursorKeys()
-
-        this.reticle = this.add.image(-gameOptions.windowWidth/2,-gameOptions.windowHeight/2,"reticle")
-        this.addEvents();
-
-        this.bulletGroup = new BulletGroup(this);
-        this.physics.add.overlap(this.bulletGroup,this.groundGroup,this.bulletToucGround,null,this)
-
-        this.moneyGroup = this.physics.add.group({})
         this.money = 0
-        this.physics.add.overlap(this.character,this.moneyGroup, this.collectMoney , null , this)
 
-        this.cardGroup = this.physics.add.group({})
-        this.hasCard = false
+        //relations
+        this.physics.add.collider(this.character, this.groundGroup);
+        this.cursors = this.input.keyboard.createCursorKeys()
         this.physics.add.overlap(this.character, this.cardGroup, this.collectCard , null, this)
-
-        this.enemyDestroyerGroup = new EnemyDestroyerGroup(this)
-
-
+        this.physics.add.overlap(this.character,this.moneyGroup, this.collectMoney , null , this)
+        this.physics.add.overlap(this.bulletGroup,this.groundGroup,this.bulletTouchGround, null, this)
 
 
+        //bullet listener and add resqueplane
+        this.addEvents();
+        for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
+            this.groundGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(gameOptions.windowHeight-gameOptions.widthOfTile)+(gameOptions.widthOfTile/2),("innerBlock"));
+        }
 
+
+
+
+        //loads
+        this.loadLevel2()
+        this.loadHud()
+
+        /*this.movableObjectGroup = new MovableObjectGroup(this)
+        this.movableObjectGroup.create(this,"innerBlock",[100,100],[200,200])
+        this.movableObjectGroup.update(this)*/
+    }
+
+    update () {
+        //character movements
+        if(this.cursors.left.isDown) {
+            this.character.setFlipX(true)
+            this.character.isFacingLeft = true;
+            this.character.body.velocity.x = -gameOptions.characterSpeed
+        }
+        else if(this.cursors.right.isDown) {
+            this.character.setFlipX(false)
+            this.character.isFacingLeft = false;
+            this.character.body.velocity.x = gameOptions.characterSpeed
+        }
+        else {
+            this.character.body.velocity.x = 0
+        }
+
+        //jump logic
+        if(this.character.hasHeldJumpFor > 1 && this.character.hasTouchedGroundFor > 4 && this.character.jumpcount == 1) { //normal jump
+            this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
+            this.character.jumpcount = 0;
+            this.character.hasTouchedGroundFor = 0;
+            this.character.jumpAnimationCounter = 1;
+        }else if(this.cursors.up.isDown && this.character.jumpcount == 0 && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
+            //this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
+            this.character.jumpcount = this.character.jumpcount - 1
+        }else if (this.character.jumpcount == -1 && this.character.doubleJumpTimer < gameOptions.doubleJumpFrames && this.character.hasHeldJumpFor > 3){ //use jetpack
+            this.character.body.velocity.y = -(gameOptions.jetPackLiftGravity)*((gameOptions.doubleJumpFrames-this.character.doubleJumpTimer)/gameOptions.doubleJumpFrames)//caluclation so jetpack power gradually goes down
+        }else if(this.character.hasTouchedGroundFor > 4) {
+            this.character.jumpcount = 1
+            this.character.doubleJumpTimer = 0
+            this.character.jumpAnimationCounter = 0;
+        }
+
+        //character animation handling
+        if (this.character.jumpcount == 1){
+            if(this.cursors.left.isDown) {
+                this.character.anims.play("walk", true)
+            }
+            else if(this.cursors.right.isDown) {
+                this.character.anims.play("walk", true)
+            }
+            else {
+                this.character.anims.play("idle",true)
+            }
+        } else if(this.character.jumpAnimationCounter == 1){
+            this.character.anims.play("jump",true)
+        } else if(this.character.jumpAnimationCounter == 2){
+            this.character.anims.play("inAir",true)
+        } else if (this.character.jumpAnimationCounter == 3){
+            this.character.anims.play("landing",true)
+        }
+
+
+        //frame trackers (maybe combine later)
+        if (this.cursors.up.isDown){//tracker for how long has up been held
+            this.character.hasReleasedJumpFor = 0;
+        } else {
+            this.character.hasReleasedJumpFor = this.character.hasReleasedJumpFor + 1;
+        }
+
+        if (!this.cursors.up.isDown){//tracker for how long has up been released
+            this.character.hasHeldJumpFor = 0;
+        } else {
+            this.character.hasHeldJumpFor = this.character.hasHeldJumpFor + 1;
+        }
+
+        if (!this.character.body.touching.down){//tracker for how long has character touched ground
+            this.character.hasTouchedGroundFor = 0;
+        } else {
+            this.character.hasTouchedGroundFor = this.character.hasTouchedGroundFor + 1;
+        }
+
+        if (this.character.jumpcount == -1){ //tracker for jetpack frames
+            this.character.doubleJumpTimer++
+        }
+
+
+        //jump animation tracker
+        if (this.character.jumpAnimationCounter == 1 && this.character.jumpAnimationTimeCounter < 10){ //jump animation counter logic
+            this.character.jumpAnimationTimeCounter++
+        } else if(this.character.jumpAnimationCounter == 1 && this.character.jumpAnimationTimeCounter >= 10){
+            this.character.jumpAnimationTimeCounter = 0
+            this.character.jumpAnimationCounter = 2
+        } else if(this.character.jumpAnimationCounter == 2 && this.character.doubleJumpTimer + 50 >= gameOptions.doubleJumpFrames){
+            this.character.jumpAnimationCounter = 3
+            this.character.jumpAnimationTimeCounter = 0
+        }
+
+    }
+
+    loadAnims(){
         this.anims.create({
             key: "walk",
             frames: this.anims.generateFrameNumbers("characterWalk", {start: 0, end: 5}),
@@ -143,103 +271,17 @@ class PlayGame extends Phaser.Scene {
             repeat: -1
         })
 
-        
-        //this.cardGroup.create(400,400).anims.play("cardAnimated",true) //test if card works
-        //this.moneyGroup.create(400,400).anims.play("moneyAnimated",true) //test if money works
-
-        this.loadHud()
-    }
-
-    update () {
-        if(this.cursors.left.isDown) {
-            this.character.setFlipX(true)
-            this.character.isFacingLeft = true;
-            this.character.body.velocity.x = -gameOptions.characterSpeed
-        }
-        else if(this.cursors.right.isDown) {
-            this.character.setFlipX(false)
-            this.character.isFacingLeft = false;
-            this.character.body.velocity.x = gameOptions.characterSpeed
-        }
-        else {
-            this.character.body.velocity.x = 0
-        }
-
-        if(this.character.hasHeldJumpFor > 1 && this.character.hasTouchedGroundFor > 4 && this.character.jumpcount == 1) { //normal jump
-            this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
-            this.character.jumpcount = 0;
-            this.character.hasTouchedGroundFor = 0;
-            this.character.jumpAnimationCounter = 1;
-        }else if(this.cursors.up.isDown && this.character.jumpcount == 0 && this.character.hasReleasedJumpFor > 1) { //initiate jetpack in air
-            //this.character.body.velocity.y = -gameOptions.characterGravity / 1.6
-            this.character.jumpcount = this.character.jumpcount - 1
-        }else if (this.character.jumpcount == -1 && this.character.doubleJumpTimer < gameOptions.doubleJumpFrames && this.character.hasHeldJumpFor > 3){ //use jetpack
-            this.character.body.velocity.y = -(gameOptions.jetPackLiftGravity)*((gameOptions.doubleJumpFrames-this.character.doubleJumpTimer)/gameOptions.doubleJumpFrames)//caluclation so jetpack power gradually goes down
-        }else if(this.character.hasTouchedGroundFor > 4) {
-            this.character.jumpcount = 1
-            this.character.doubleJumpTimer = 0
-            this.character.jumpAnimationCounter = 0;
-        }
-
-        //animation handling
-        if (this.character.jumpcount == 1){
-            if(this.cursors.left.isDown) {
-                this.character.anims.play("walk", true)
-            }
-            else if(this.cursors.right.isDown) {
-                this.character.anims.play("walk", true)
-            }
-            else {
-                this.character.anims.play("idle",true)
-            }
-        } else if(this.character.jumpAnimationCounter == 1){
-            this.character.anims.play("jump",true)
-        } else if(this.character.jumpAnimationCounter == 2){
-            this.character.anims.play("inAir",true)
-        } else if (this.character.jumpAnimationCounter == 3){
-            this.character.anims.play("landing",true)
-        }
-
-        if (this.cursors.up.isDown){//tracker for how long has up been held
-            this.character.hasReleasedJumpFor = 0;
-        } else {
-            this.character.hasReleasedJumpFor = this.character.hasReleasedJumpFor + 1;
-        }
-
-        if (!this.cursors.up.isDown){//tracker for how long has up been released
-            this.character.hasHeldJumpFor = 0;
-        } else {
-            this.character.hasHeldJumpFor = this.character.hasHeldJumpFor + 1;
-        }
-
-        if (!this.character.body.touching.down){//tracker for how long has character touched ground
-            this.character.hasTouchedGroundFor = 0;
-        } else {
-            this.character.hasTouchedGroundFor = this.character.hasTouchedGroundFor + 1;
-        }
-
-        if (this.character.jumpcount == -1){ //tracker for jetpack frames
-            this.character.doubleJumpTimer++
-        }
-
-        if (this.character.jumpAnimationCounter == 1 && this.character.jumpAnimationTimeCounter < 10){ //jump animation counter logic
-            this.character.jumpAnimationTimeCounter++
-        } else if(this.character.jumpAnimationCounter == 1 && this.character.jumpAnimationTimeCounter >= 10){
-            this.character.jumpAnimationTimeCounter = 0
-            this.character.jumpAnimationCounter = 2
-        } else if(this.character.jumpAnimationCounter == 2 && this.character.doubleJumpTimer + 50 >= gameOptions.doubleJumpFrames){
-            this.character.jumpAnimationCounter = 3
-            this.character.jumpAnimationTimeCounter = 0
-        }
-
     }
 
 
     loadLevel1() {//level width 25 blocks, level height 14 blocks
         let level1PhysicsObjects = [] //should be three dimensional matrix as follows: [z(height)][y(width)][0,1], where 0 is the name of the block in string form and 1 is the roation of the block in int form
+        let level1ToggleObjects = []
+        let level1Objects = []
         let characterSpawnBlock = [0,13]
-        this.levelEssentialLoad()
         this.initializeLevelToEmpty(level1PhysicsObjects)
+        this.initializeLevelToEmpty(level1ToggleObjects)
+        this.initializeLevelToEmpty(level1Objects)
         for (let index = 0; index < 25; index++) {
             level1PhysicsObjects[13][index] = ["sideBlock",0]
             
@@ -272,28 +314,65 @@ class PlayGame extends Phaser.Scene {
         }
 
 
-        this.loadLevel(level1PhysicsObjects,characterSpawnBlock)
+
+        this.loadLevel(level1PhysicsObjects,characterSpawnBlock,level1ToggleObjects,level1Objects)
 
     }
 
     loadLevel2() {//level width 25 blocks, level height 14 blocks
-        let level1PhysicsObjects = [] //should be three dimensional matrix as follows: [z(height)][y(width)][0,1], where 0 is the name of the block in string form and 1 is the roation of the block in int form
+        let level2PhysicsObjects = [] //should be three dimensional matrix as follows: [z(height)][y(width)][0,1], where 0 is the name of the block in string form and 1 is the roation of the block in int form
+        let level2ToggleObjects = []
+        let level2Objects = []
         let characterSpawnBlock = [0,13]
-        this.levelEssentialLoad()
-        this.initializeLevelToEmpty(level1PhysicsObjects)
+        this.initializeLevelToEmpty(level2PhysicsObjects)
+        this.initializeLevelToEmpty(level2ToggleObjects)
+        this.initializeLevelToEmpty(level2Objects)
         for (let index = 0; index < 25; index++) {
-            level1PhysicsObjects[13][index] = ["sideBlock",0]
+            level2PhysicsObjects[13][index] = ["sideBlock",0]
             
         }
 
-        
+
+        //first obstacle
+        level2PhysicsObjects[12][6] = ["sideBlock",-90]
+        level2PhysicsObjects[13][6] = ["innerCornerSide",0]
+        level2PhysicsObjects[13][7] = ["innerCornerSide",90]
+        level2PhysicsObjects[12][7] = ["sideBlock",90]
+        level2PhysicsObjects[11][6] = ["outerCornerSide",0]
+        level2PhysicsObjects[11][7] = ["outerCornerSide",90]
+
+        //platfrom on right
+        level2PhysicsObjects[5][20] = ["pipeEnd",90]
+        for (let index = 0; index < 4; index++) {
+            level2PhysicsObjects[5][21+index]=["pipeMid",90]            
+        }
+
+        //house on top left
+        for (let index = 0; index < 5; index++) {
+            level2PhysicsObjects[4][0+index] = ["redBlockMid",0]
+        }
+        level2PhysicsObjects[4][5] = ["redBlockRight",0]
+
+        level2PhysicsObjects[0][5] = ["redBlockRight",90]
+
+        for (let index = 0; index < 3; index++) {
+            level2ToggleObjects[1+index][5] = ["doorBlock",0]
+        }
+
+        level2Objects[4][23] = ["card"]
+        level2Objects[12][23] = ["money"]
+        level2Objects[4][22] = ["money"]
+        level2Objects[12][21] = ["money"]
 
 
-        this.loadLevel(level1PhysicsObjects,characterSpawnBlock)
+
+
+
+        this.loadLevel(level2PhysicsObjects,characterSpawnBlock,level2ToggleObjects,level2Objects)
 
     }
     
-    loadLevel(levelPhysicsData,characterSpawn){
+    loadLevel(levelPhysicsData,characterSpawn,levelToggleObjects,otherObjects){
         
         for (let indexZ = 0; indexZ < levelPhysicsData.length; indexZ++) {
             const element = levelPhysicsData[indexZ];
@@ -310,27 +389,56 @@ class PlayGame extends Phaser.Scene {
             
         }
 
-        
-        this.character = this.physics.add.sprite(characterSpawn[0]*gameOptions.widthOfTile+(72/2),characterSpawn[1]*gameOptions.widthOfTile-(72/2),"characterIdle",0);
+        for (let indexZ = 0; indexZ < levelToggleObjects.length; indexZ++) {
+            const element = levelToggleObjects[indexZ];
+
+            for (let indexY = 0; indexY < element.length; indexY++) {
+                const innerElement = element[indexY];
+
+                if (innerElement[0] != ""){
+                    this.groundToggleGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2),innerElement[0]).angle = innerElement[1]
+                }
+                
+            }
+
+            
+        }
+
+        for (let indexZ = 0; indexZ < otherObjects.length; indexZ++) {
+            const element = otherObjects[indexZ];
+
+            for (let indexY = 0; indexY < element.length; indexY++) {
+                const innerElement = element[indexY];
+
+                if (innerElement[0] == "money"){
+                    this.moneyGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2)).anims.play("moneyAnimated",true)
+                } else if (innerElement[0] == "card"){
+                    this.cardGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2)).anims.play("cardAnimated",true)
+                }
+                
+            }
+
+            
+        }
+
+        this.character.x = characterSpawn[0]*gameOptions.widthOfTile+(72/2)
+        this.character.y = characterSpawn[1]*gameOptions.widthOfTile-(72/2)
         this.character.isFacingLeft = false;
 
     }
 
-    levelEssentialLoad(){
-        this.hasCard = false
-        this.background = this.add.image(0,0,"bg").setOrigin(0,0);
-        this.background.displayWidth = gameOptions.windowWidth;
-        this.background.displayHeight = gameOptions.windowHeight;
-        
-        this.groundGroup = this.physics.add.group({
-            immovable: true,
-            allowGravity: false
-        })
 
-        for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
-            this.groundGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(gameOptions.windowHeight-gameOptions.widthOfTile)+(gameOptions.widthOfTile/2),("innerBlock"));
-        }
-        
+    toggleBlocksOff(){
+
+        this.groundToggleGroup.setVisible(false)
+        this.groundToggleGroup.setActive(false)
+
+    }
+
+    toggleBlocksOn(){
+
+        this.groundToggleGroup.setVisible(true)
+        this.groundToggleGroup.setActive(true)
 
     }
 
@@ -379,9 +487,13 @@ class PlayGame extends Phaser.Scene {
         this.bulletGroup.fireBullet(this.character.x, this.character.y,this.reticle.x, this.reticle.y, this.character.isFacingLeft)
     }
 
-    bulletToucGround(bullet){
+    bulletTouchGround(bullet, end){
+        console.log("bullet touching ground")
+        bullet.body.reset(-100,-100)
         bullet.setActive(false);
         bullet.setVisible(false);
+        bullet.setGravity(0,0)
+        console.log(bullet)
     }
 
     collectMoney(character, start){ //for score
@@ -395,6 +507,7 @@ class PlayGame extends Phaser.Scene {
         start.disableBody(true,true)
         this.hasCard = true
         this.cardText.setText("Card Aquired")
+        this.toggleBlocksOff()
     }
 
 }
@@ -411,8 +524,7 @@ class EnemyDestroyer extends Phaser.Physics.Arcade.Sprite{
 	}
 }
 
-class BulletGroup extends Phaser.Physics.Arcade.Group
-{
+class BulletGroup extends Phaser.Physics.Arcade.Group{
 	constructor(scene) {
 		super(scene.physics.world, scene);
 		// Initialize the group
@@ -435,11 +547,13 @@ class BulletGroup extends Phaser.Physics.Arcade.Group
 }
  
 class Bullet extends Phaser.Physics.Arcade.Sprite {
-    p
-    reUpdate(time, delta) {
+    preUpdate(time, delta) {
 		super.preUpdate(time, delta);
  
-		if (this.y <= 0 || this.y > gameOptions.windowHeight || x < 0 || x > gameOptions.windowWidth) {
+		if (this.y <= 0 || this.y > gameOptions.windowHeight || this.x <= 0 || this.x > gameOptions.windowWidth) {
+            
+            this.body.reset(-100,-100)
+            this.body.setGravity(0,0)
 			this.setActive(false);
 			this.setVisible(false);
 		}
@@ -460,8 +574,6 @@ class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.setActive(true);
         this.setVisible(true);
 
-        /*this.setVelocityY(finalY*gameOptions.bulletSpeed);
-        this.setVelocityX(finalX*gameOptions.bulletSpeed)*/
 
         this.setGravity(0,gameOptions.bulletDrop)
 
@@ -495,3 +607,52 @@ class Bullet extends Phaser.Physics.Arcade.Sprite {
 
 
 }
+
+/*class MovableObjectGroup extends Phaser.Physics.Arcade.Group{
+    constructor(scene){
+        super(scene.physics.world, scene)
+        this.setActive(true)
+        this.setVisible(true)
+    }
+
+
+    create(scene, texture, point1, point2){
+        let newObject = new MovableObject(scene,texture, point1, point2)
+        super.add(newObject, true)
+    }
+    
+    update(scene){
+        let childern = this.getChildren()
+        childern.forEach(element => {
+            element.update()
+        });
+    }
+}
+
+
+class MovableObject extends Phaser.Physics.Arcade.Image{
+    constructor(scene,texture, point1, point2){
+        super(scene,point1[0],point1[1],texture)
+        this.point1 = point1
+        this.point2 = point2
+        this.nextPoint = point2
+        this.setActive(true)
+        this.setVisible(true)
+
+        console.log(this)
+        scene.physics.moveTo(this,this.nextPoint[0],this.nextPoint[1],200)
+    }
+
+    update(scene){
+        this.distance = Math.sqrt((this.nextPoint[0]-this.x)**2+(this.nextPoint[1]-this.y)**2)
+        console.log(this.distance)
+        if (this.distance < 3) {
+            if (this.nextPoint = this.point1){
+                this.nextPoint = this.point2
+            } else {
+                this.nextPoint = this.point1
+            }
+            scene.physics.moveTo(this,this.nextPoint[0],this.nextPoint[1],200)
+        }
+    }
+}*/
