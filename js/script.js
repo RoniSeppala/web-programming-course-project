@@ -55,6 +55,7 @@ class PlayGame extends Phaser.Scene {
         this.load.image("redBlockMid", "assets/stageObjects/Tiles/IndustrialTile_59.png")
         this.load.image("redBlockRight", "assets/stageObjects/Tiles/IndustrialTile_60.png")
         this.load.image("doorBlock", "assets/stageObjects/Tiles/IndustrialTile_54.png")
+        this.load.image("finishBlock", "assets/stageObjects/Objects/Flag.png")
         this.load.spritesheet("characterIdle", "assets/character/Idle.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterWalk","assets/character/Walk.png",{frameWidth: 72, frameHeight: 72})
         this.load.spritesheet("characterJump","assets/character/Attack4.png",{frameWidth: 72, frameHeight: 72})
@@ -81,6 +82,11 @@ class PlayGame extends Phaser.Scene {
             allowGravity: false
         })
 
+        this.groundRescueGroup = this.physics.add.group({
+            immovable: true,
+            allowGravity: false
+        })
+
         this.groundToggleGroup = this.physics.add.group({
             immovable: true,
             allowGravity: false
@@ -91,6 +97,7 @@ class PlayGame extends Phaser.Scene {
         this.cardGroup = this.physics.add.group({})
         this.enemyDestroyerGroup = new EnemyDestroyerGroup(this)
         this.bulletGroup = new BulletGroup(this);
+        this.moveLevelTrigger = this.physics.add.image(200,200,"finishBlock")
 
         //initialization
         this.hasCard = -1 //-1 for not in leve, 0 for not aquired, 1 for aquired
@@ -104,26 +111,42 @@ class PlayGame extends Phaser.Scene {
         this.character.jumpAnimationCounter = 0;
         this.character.jumpAnimationTimeCounter = 0;
         this.money = 0
+        this.nextLevel = 1
 
         //relations
         this.physics.add.collider(this.character, this.groundGroup);
+        this.physics.add.collider(this.character, this.groundRescueGroup);
         this.cursors = this.input.keyboard.createCursorKeys()
         this.physics.add.overlap(this.character, this.cardGroup, this.collectCard , null, this)
         this.physics.add.overlap(this.character,this.moneyGroup, this.collectMoney , null , this)
         this.physics.add.overlap(this.bulletGroup,this.groundGroup,this.bulletTouchGround, null, this)
+        this.physics.add.overlap(this.character,this.moveLevelTrigger,this.loadNextLevel,null,this)
 
 
-        //bullet listener and add resqueplane
+        //bullet listener and add resqueplane + box around view
         this.addEvents();
         for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
-            this.groundGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(gameOptions.windowHeight-gameOptions.widthOfTile)+(gameOptions.widthOfTile/2),("innerBlock"));
+            this.groundRescueGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(gameOptions.windowHeight-gameOptions.widthOfTile)+(gameOptions.widthOfTile/2),("innerBlock"));
         }
+        for (let index = 0; index < (gameOptions.windowHeight/gameOptions.widthOfTile); index++) {
+            this.groundRescueGroup.create((-16),((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)),("innerBlock"));
+            
+        }
+        for (let index = 0; index < (gameOptions.windowHeight/gameOptions.widthOfTile); index++) {
+            this.groundRescueGroup.create((-16+(26*gameOptions.widthOfTile)),((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)),("innerBlock"));
+            
+        }
+        for (let index = 0; index < (gameOptions.windowWidth/gameOptions.widthOfTile)*3; index++) {
+            this.groundRescueGroup.create(((index*gameOptions.widthOfTile)+(gameOptions.widthOfTile/2)-gameOptions.windowWidth),(-17),("innerBlock"));
+        }
+        
+
 
 
 
 
         //loads
-        this.loadLevel2()
+        this.loadNextLevel()
         this.loadHud()
 
         /*this.movableObjectGroup = new MovableObjectGroup(this)
@@ -273,12 +296,60 @@ class PlayGame extends Phaser.Scene {
 
     }
 
+    loadNextLevel(){
+        this.unloadLevel()
+        if (this.nextLevel == 1){
+            this.loadLevel1()
+            this.nextLevel = 2
+        } else if (this.nextLevel == 2){
+            this.loadLevel2()
+            this.nextLevel = 3
+        } else {
+            this.loadLevel1()
+            this.nextLevel = 2
+        }
+    }
+
+    unloadLevel(){
+        const childrenOfGround = this.groundGroup.getChildren()
+        for (let index = childrenOfGround.length; index >= 0; index--) {
+            const element = childrenOfGround[index];
+            if (element){
+                element.destroy()
+            }
+        }
+
+        const childrenOfToggleable = this.groundToggleGroup.getChildren()
+        for (let index = childrenOfToggleable.length; index >= 0; index--) {
+            const element = childrenOfToggleable[index];
+            if (element){
+                element.destroy()
+            }
+        }
+
+        const childrenMoney = this.moneyGroup.getChildren()
+        for (let index = childrenMoney.length; index >= 0; index--) {
+            const element = childrenMoney[index];
+            if (element){
+                element.destroy()
+            }
+        }
+        const childrenCard = this.cardGroup.getChildren()
+        for (let index = childrenCard.length; index >= 0; index--) {
+            const element = childrenCard[index];
+            if (element){
+                element.destroy()
+            }
+        }
+    }
+
 
     loadLevel1() {//level width 25 blocks, level height 14 blocks
         let level1PhysicsObjects = [] //should be three dimensional matrix as follows: [z(height)][y(width)][0,1], where 0 is the name of the block in string form and 1 is the roation of the block in int form
         let level1ToggleObjects = []
         let level1Objects = []
         let characterSpawnBlock = [0,13]
+        let finishBlock = [23,3]
         this.initializeLevelToEmpty(level1PhysicsObjects)
         this.initializeLevelToEmpty(level1ToggleObjects)
         this.initializeLevelToEmpty(level1Objects)
@@ -315,7 +386,7 @@ class PlayGame extends Phaser.Scene {
 
 
 
-        this.loadLevel(level1PhysicsObjects,characterSpawnBlock,level1ToggleObjects,level1Objects)
+        this.loadLevel(level1PhysicsObjects,characterSpawnBlock,level1ToggleObjects,level1Objects,finishBlock)
 
     }
 
@@ -324,6 +395,7 @@ class PlayGame extends Phaser.Scene {
         let level2ToggleObjects = []
         let level2Objects = []
         let characterSpawnBlock = [0,13]
+        let finishBlock = [1,1]
         this.initializeLevelToEmpty(level2PhysicsObjects)
         this.initializeLevelToEmpty(level2ToggleObjects)
         this.initializeLevelToEmpty(level2Objects)
@@ -368,11 +440,12 @@ class PlayGame extends Phaser.Scene {
 
 
 
-        this.loadLevel(level2PhysicsObjects,characterSpawnBlock,level2ToggleObjects,level2Objects)
+        this.loadLevel(level2PhysicsObjects,characterSpawnBlock,level2ToggleObjects,level2Objects,finishBlock)
 
     }
+
     
-    loadLevel(levelPhysicsData,characterSpawn,levelToggleObjects,otherObjects){
+    loadLevel(levelPhysicsData,characterSpawn,levelToggleObjects,otherObjects,finishBlock){
         
         for (let indexZ = 0; indexZ < levelPhysicsData.length; indexZ++) {
             const element = levelPhysicsData[indexZ];
@@ -414,6 +487,7 @@ class PlayGame extends Phaser.Scene {
                     this.moneyGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2)).anims.play("moneyAnimated",true)
                 } else if (innerElement[0] == "card"){
                     this.cardGroup.create(indexY*gameOptions.widthOfTile+(gameOptions.widthOfTile/2), indexZ*gameOptions.widthOfTile+(gameOptions.widthOfTile/2)).anims.play("cardAnimated",true)
+                    this.toggleGroupCollider = this.physics.add.collider(this.character, this.groundToggleGroup);
                 }
                 
             }
@@ -425,6 +499,10 @@ class PlayGame extends Phaser.Scene {
         this.character.y = characterSpawn[1]*gameOptions.widthOfTile-(72/2)
         this.character.isFacingLeft = false;
 
+        this.moveLevelTrigger.x = finishBlock[0]*gameOptions.widthOfTile+16
+        this.moveLevelTrigger.y = finishBlock[1]*gameOptions.widthOfTile+32
+
+
     }
 
 
@@ -432,6 +510,7 @@ class PlayGame extends Phaser.Scene {
 
         this.groundToggleGroup.setVisible(false)
         this.groundToggleGroup.setActive(false)
+        this.toggleGroupCollider.destroy()
 
     }
 
@@ -488,12 +567,10 @@ class PlayGame extends Phaser.Scene {
     }
 
     bulletTouchGround(bullet, end){
-        console.log("bullet touching ground")
         bullet.body.reset(-100,-100)
         bullet.setActive(false);
         bullet.setVisible(false);
         bullet.setGravity(0,0)
-        console.log(bullet)
     }
 
     collectMoney(character, start){ //for score
